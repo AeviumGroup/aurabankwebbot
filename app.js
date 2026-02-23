@@ -1,60 +1,96 @@
-// app.js - МАКСИМАЛЬНО ПРОСТАЯ ВЕРСИЯ
+// app.js - ДИАГНОСТИЧЕСКАЯ ВЕРСИЯ
 
 let tg = window.Telegram.WebApp;
 tg.expand();
 
-// Получаем ID из URL
 const urlParams = new URLSearchParams(window.location.search);
 const userId = urlParams.get('user_id');
 
-console.log('START: userId =', userId);
+console.log('=== START ===');
+console.log('User ID from URL:', userId);
 
-// Ждем загрузки DOM
+// СОЗДАЕМ ОКНО ДЛЯ ЛОГОВ
+const logWindow = document.createElement('div');
+logWindow.style.cssText = 'position:fixed; bottom:0; left:0; right:0; background:black; color:lime; padding:10px; font-size:12px; z-index:10000; max-height:200px; overflow-y:auto;';
+document.body.appendChild(logWindow);
+
+function log(msg) {
+    console.log(msg);
+    logWindow.innerHTML += '<br>' + new Date().toLocaleTimeString() + ': ' + msg;
+    logWindow.scrollTop = logWindow.scrollHeight;
+}
+
+log('App started');
+
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded');
+    log('DOM loaded');
     
-    // Показываем что у нас есть
-    document.getElementById('card-holder').textContent = 'Загрузка...';
-    document.getElementById('user-id').textContent = userId || '-';
-    
-    // Отправляем запрос
     if (userId) {
-        const data = {
+        log('Sending request for user ' + userId);
+        tg.sendData(JSON.stringify({
             action: 'get_profile',
             user_id: parseInt(userId)
-        };
-        console.log('Sending:', data);
-        tg.sendData(JSON.stringify(data));
+        }));
+    } else {
+        log('ERROR: No user ID');
     }
 });
 
-// Получаем ответ
 tg.onEvent('webAppData', function(data) {
-    console.log('GOT DATA:', data);
+    log('RAW DATA: ' + data);
     
     try {
         const response = JSON.parse(data);
-        console.log('Parsed:', response);
+        log('PARSED: ' + JSON.stringify(response));
         
+        // Проверяем каждое поле
         if (response.user_id) {
-            // Обновляем ВСЕ элементы
-            document.getElementById('card-number').textContent = '**** **** **** ' + response.user_id.toString().slice(-4);
-            document.getElementById('card-holder').textContent = response.first_name || 'Пользователь';
-            document.getElementById('card-balance').textContent = (response.balance || 0) + ' Aura';
             document.getElementById('user-id').textContent = response.user_id;
-            document.getElementById('username').textContent = response.username || 'Не указан';
-            
-            console.log('Profile updated!');
+            document.getElementById('card-number').textContent = '**** **** **** ' + response.user_id.toString().slice(-4);
+            log('✓ user_id: ' + response.user_id);
+        } else {
+            log('✗ user_id missing');
         }
+        
+        if (response.balance !== undefined) {
+            document.getElementById('card-balance').textContent = response.balance + ' Aura';
+            log('✓ balance: ' + response.balance);
+        } else {
+            log('✗ balance missing');
+            document.getElementById('card-balance').textContent = '0 Aura';
+        }
+        
+        if (response.first_name) {
+            document.getElementById('card-holder').textContent = response.first_name;
+            log('✓ first_name: ' + response.first_name);
+        } else {
+            log('✗ first_name missing');
+        }
+        
+        if (response.username) {
+            document.getElementById('username').textContent = response.username;
+            log('✓ username: ' + response.username);
+        } else {
+            log('✗ username missing');
+            document.getElementById('username').textContent = 'Не указан';
+        }
+        
+        log('✅ Update complete');
+        
     } catch(e) {
-        console.error('Error:', e);
+        log('ERROR parsing: ' + e);
     }
 });
 
-// Простая функция для теста
-window.testUpdate = function() {
-    document.getElementById('card-holder').textContent = 'ТЕСТ';
-    document.getElementById('card-balance').textContent = '9999 Aura';
-    document.getElementById('user-id').textContent = '123456';
-    document.getElementById('username').textContent = 'test_user';
+// Кнопка для повторного запроса
+const retryBtn = document.createElement('button');
+retryBtn.textContent = '🔄 Запросить данные';
+retryBtn.style.cssText = 'position:fixed; top:10px; right:10px; z-index:10001; background:#800020; color:white; border:none; padding:10px; border-radius:5px;';
+retryBtn.onclick = function() {
+    log('Manual retry');
+    tg.sendData(JSON.stringify({
+        action: 'get_profile',
+        user_id: parseInt(userId)
+    }));
 };
+document.body.appendChild(retryBtn);
